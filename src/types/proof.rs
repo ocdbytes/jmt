@@ -45,7 +45,7 @@ pub enum SparseMerkleNode {
 }
 
 impl SparseMerkleNode {
-    pub(crate) fn hash<H: SimpleHasher>(&self) -> [u8; 32] {
+    pub fn hash<H: SimpleHasher>(&self) -> [u8; 32] {
         match self {
             SparseMerkleNode::Null => SPARSE_MERKLE_PLACEHOLDER_HASH,
             Internal(node) => node.hash::<H>(),
