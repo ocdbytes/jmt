@@ -108,6 +108,8 @@ pub use types::Version;
 /// Contains types used to bridge a [`JellyfishMerkleTree`](crate::JellyfishMerkleTree)
 /// to the backing storage recording the tree's internal data.
 pub mod storage {
+    use super::*;
+    pub use node_type::InternalNode;
     pub use node_type::{LeafNode, Node, NodeKey};
     pub use reader::HasPreimage;
     pub use reader::TreeReader;
@@ -115,8 +117,6 @@ pub mod storage {
     pub use writer::{
         NodeBatch, NodeStats, StaleNodeIndex, StaleNodeIndexBatch, TreeUpdateBatch, TreeWriter,
     };
-
-    use super::*;
 }
 
 #[cfg(any(test))]

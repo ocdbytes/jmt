@@ -35,7 +35,7 @@ pub const INTERNAL_DOMAIN_SEPARATOR: &[u8] = b"JMT::IntrnalNode";
 /// be able to forge the node/leaf type, as this assertion wouldn't be checked.
 /// Providing a [`SparseMerkleInternalNode`] or a [`SparseMerkleLeafNode`] structure is sufficient to
 /// prove the node type as one would need to reverse the hash function to forge them.
-pub(crate) enum SparseMerkleNode {
+pub enum SparseMerkleNode {
     // The default sparse node
     Null,
     // The internal sparse merkle tree node
