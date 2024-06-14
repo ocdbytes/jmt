@@ -146,7 +146,7 @@ impl core::fmt::Display for MissingRootError {
 
 // TODO: reorg
 
-const SPARSE_MERKLE_PLACEHOLDER_HASH: [u8; 32] = *b"SPARSE_MERKLE_PLACEHOLDER_HASH__";
+const SPARSE_MERKLE_PLACEHOLDER_HASH: [u8; 32] = [0u8; 32];
 
 /// An owned value stored in the [`JellyfishMerkleTree`].
 pub type OwnedValue = alloc::vec::Vec<u8>;
