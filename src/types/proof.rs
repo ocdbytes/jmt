@@ -136,7 +136,7 @@ impl PartialEq for SparseMerkleLeafNode {
 }
 
 impl SparseMerkleLeafNode {
-    pub(crate) fn new(key_hash: KeyHash, value_hash: ValueHash) -> Self {
+    pub fn new(key_hash: KeyHash, value_hash: ValueHash) -> Self {
         SparseMerkleLeafNode {
             key_hash,
             value_hash,

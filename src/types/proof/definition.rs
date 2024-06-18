@@ -74,7 +74,7 @@ impl<H: SimpleHasher> Clone for SparseMerkleProof<H> {
 
 impl<H: SimpleHasher> SparseMerkleProof<H> {
     /// Constructs a new `SparseMerkleProof` using leaf and a list of siblings.
-    pub(crate) fn new(leaf: Option<SparseMerkleLeafNode>, siblings: Vec<SparseMerkleNode>) -> Self {
+    pub fn new(leaf: Option<SparseMerkleLeafNode>, siblings: Vec<SparseMerkleNode>) -> Self {
         SparseMerkleProof {
             leaf,
             siblings,
