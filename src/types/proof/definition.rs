@@ -3,10 +3,11 @@
 
 //! This module has definition of various proofs.
 use core::marker::PhantomData;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::{SparseMerkleInternalNode, SparseMerkleLeafNode, SparseMerkleNode};
 use crate::{
-    storage::Node,
+    storage::{Node, NodeKey},
     types::nibble::nibble_path::{skip_common_prefix, NibblePath},
     Bytes32Ext, KeyHash, RootHash, SimpleHasher, ValueHash, SPARSE_MERKLE_PLACEHOLDER_HASH,
 };
@@ -38,6 +39,12 @@ pub struct SparseMerkleProof<H: SimpleHasher> {
 
     /// A marker type showing which hash function is used in this proof.
     phantom_hasher: PhantomData<H>,
+}
+
+/// Represents a batch proof with shared siblings.
+pub struct BatchSparseMerkleProof {
+    pub leaves: HashMap<KeyHash, SparseMerkleLeafNode>,
+    pub shared_siblings: HashMap<NodeKey, SparseMerkleNode>,
 }
 
 // Deriving Debug fails since H is not Debug though phantom_hasher implements it
@@ -182,23 +189,43 @@ impl<H: SimpleHasher> SparseMerkleProof<H> {
             .leaf
             .clone()
             .map_or(SPARSE_MERKLE_PLACEHOLDER_HASH, |leaf| leaf.hash::<H>());
-        let actual_root_hash = self
-            .siblings
-            .iter()
-            .zip(
-                element_key
-                    .0
-                    .iter_bits()
-                    .rev()
-                    .skip(256 - self.siblings.len()),
-            )
-            .fold(current_hash, |hash, (sibling_node, bit)| {
-                if bit {
-                    SparseMerkleInternalNode::new(sibling_node.hash::<H>(), hash).hash::<H>()
-                } else {
-                    SparseMerkleInternalNode::new(hash, sibling_node.hash::<H>()).hash::<H>()
-                }
-            });
+
+        println!(">>> key bits = {:x?}", element_key.0);
+
+        let key_bits = element_key
+            .0
+            .iter_bits()
+            .rev()
+            .skip(256 - self.siblings.len());
+
+        let zipped = self.siblings.iter().zip(key_bits);
+
+        let mut hash = current_hash;
+        println!(">>> leaf hash : {:x?}", hash);
+
+        for (i, (sibling_node, bit)) in zipped.enumerate() {
+            let sibling_hash = sibling_node.hash::<H>();
+
+            println!("Step {}:", i);
+            println!("  Bit: {}", bit);
+            println!("  Current hash: {:x?}", hash);
+            println!("  Sibling hash: {:x?}", sibling_hash);
+            println!("  sibling node: {:x?}", sibling_node);
+
+            let parent_node: SparseMerkleInternalNode = if bit {
+                // current node is on the left, sibling on the right
+                SparseMerkleInternalNode::new(sibling_hash, hash)
+            } else {
+                // sibling on the left, current node on the right
+                SparseMerkleInternalNode::new(hash, sibling_hash)
+            };
+
+            hash = parent_node.hash::<H>();
+
+            println!("  New hash after combining: {:x?}", hash);
+        }
+
+        let actual_root_hash = hash;
 
         ensure!(
             actual_root_hash == expected_root_hash.0,

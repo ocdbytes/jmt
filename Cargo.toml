@@ -39,6 +39,7 @@ blake3 = { version = "1.4.0", optional = true, features = ["traits-preview"] }
 hex = "0.4"
 tracing = "0.1"
 ics23 = { version = "0.11.0", optional = true}
+bitvec ={ version = "1"}
 
 [dev-dependencies]
 hex = { version = "0.4", features = ["serde"] }

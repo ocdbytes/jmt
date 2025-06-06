@@ -1,4 +1,5 @@
 use crate::storage::Node::Leaf;
+use crate::SPARSE_MERKLE_PLACEHOLDER_HASH;
 use alloc::{collections::BTreeMap, vec::Vec};
 use alloc::{format, vec};
 use anyhow::{bail, ensure, format_err, Context, Result};
@@ -8,9 +9,11 @@ use core::{cmp::Ordering, convert::TryInto};
 use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
+use std::collections::{HashSet, VecDeque};
 
+use crate::proof::definition::{BatchSparseMerkleProof, SparseMerkleMultiProof};
 use crate::proof::definition::UpdateMerkleProof;
-use crate::proof::{SparseMerkleLeafNode, SparseMerkleNode};
+use crate::proof::{SparseMerkleInternalNode, SparseMerkleLeafNode, SparseMerkleNode};
 use crate::{
     node_type::{Child, Children, InternalNode, LeafNode, Node, NodeKey, NodeType},
     storage::{TreeReader, TreeUpdateBatch},
@@ -1010,8 +1013,10 @@ where
     ) -> Result<(Option<OwnedValue>, SparseMerkleProof<H>)> {
         // Empty tree just returns proof with no sibling hash.
         let mut next_node_key = NodeKey::new_empty_path(version);
+        println!("\n\n>>> next node key : {:?}", next_node_key);
         let mut siblings: Vec<SparseMerkleNode> = vec![];
         let nibble_path = NibblePath::new(key.0.to_vec());
+        println!(">>> nibble path : {:?}", nibble_path);
         let mut nibble_iter = nibble_path.nibbles();
 
         // We limit the number of loops here deliberately to avoid potential cyclic graph bugs
@@ -1024,6 +1029,7 @@ where
                     err
                 }
             })?;
+            println!(">>> next node : {:?}", next_node);
             match next_node {
                 Node::Internal(internal_node) => {
                     let queried_child_index = nibble_iter
@@ -1036,6 +1042,9 @@ where
                             &next_node_key,
                             queried_child_index,
                         );
+                    println!(">>> queried child index : {:?}", queried_child_index);
+                    println!(">>> child node key : {:?}", child_node_key);
+                    println!(">>> siblings in internal node : {:?}\n", siblings_in_internal);
 
                     siblings.append(&mut siblings_in_internal);
                     next_node_key = match child_node_key {
@@ -1077,6 +1086,74 @@ where
             }
         }
         bail!("Jellyfish Merkle tree has cyclic graph inside.");
+    }
+
+    /// Collects a batch proof for multiple keys, sharing sibling nodes.
+    pub fn collect_batch_proof(
+        &self,
+        version: Version,
+        keys: &[KeyHash],
+        reader: &impl TreeReader,
+    ) -> anyhow::Result<BatchSparseMerkleProof> {
+        let root_node_key = NodeKey::new_empty_path(version);
+        let mut shared_siblings: HashMap<NodeKey, SparseMerkleNode> = HashMap::new();
+        let mut leaves: HashMap<KeyHash, SparseMerkleLeafNode> = HashMap::new();
+
+        self.collect_recursive(
+            &root_node_key,
+            keys,
+            reader,
+            &mut shared_siblings,
+            &mut leaves,
+        )?;
+
+        Ok(BatchSparseMerkleProof {
+            leaves,
+            shared_siblings,
+        })
+    }
+
+    fn collect_recursive(
+        &self,
+        node_key: &NodeKey,
+        keys: &[KeyHash],
+        reader: &impl TreeReader,
+        shared_siblings: &mut HashMap<NodeKey, SparseMerkleNode>,
+        leaves: &mut HashMap<KeyHash, SparseMerkleLeafNode>,
+    ) -> anyhow::Result<()> {
+        let node = reader.get_node(node_key)?;
+
+        match node {
+            Node::Leaf(leaf) => {
+                if keys.contains(&leaf.key_hash()) {
+                    leaves.insert(leaf.key_hash(), leaf.into());
+                }
+            }
+            Node::Internal(internal_node) => {
+                let mut per_child: BTreeMap<Nibble, Vec<KeyHash>> = BTreeMap::new();
+
+                for key in keys {
+                    let nibble_index = key.nibble_at(node_key.nibble_path().num_nibbles());
+                    per_child.entry(nibble_index).or_default().push(*key);
+                }
+
+                for nibble in 0u8..16 {
+                    let nib = Nibble::from(nibble);
+                    let child_opt = internal_node.child(nib);
+
+                    if let Some(child) = child_opt {
+                        let child_node_key = node_key.gen_child_node_key(child.version, nib);
+                        if let Some(sub_keys) = per_child.get(&nib) {
+                            self.collect_recursive(&child_node_key, sub_keys, reader, shared_siblings, leaves)?;
+                        } else {
+                            shared_siblings.insert(child_node_key.clone(), SparseMerkleNode::new(child.hash));
+                        }
+                    }
+                }
+            }
+            Node::Null => {}
+        }
+        Ok(())
     }
 
     fn search_closest_extreme_node(

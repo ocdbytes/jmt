@@ -25,7 +25,16 @@ pub const INTERNAL_DOMAIN_SEPARATOR: &[u8] = b"JMT::IntrnalNode";
 
 #[cfg_attr(all(test, feature = "std"), derive(Arbitrary))]
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Eq, PartialEq, BorshSerialize, BorshDeserialize, Debug,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Hash,
 )]
 /// A [`SparseMerkleNode`] is either a null node, an internal sparse node or a leaf node.
 /// This is useful in the delete case to know if we need to coalesce the leaves on deletion.
@@ -55,10 +64,19 @@ impl SparseMerkleNode {
 }
 
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Eq, PartialEq, BorshSerialize, BorshDeserialize, Debug,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Hash,
 )]
 #[cfg_attr(all(test, feature = "std"), derive(Arbitrary))]
-pub(crate) struct SparseMerkleInternalNode {
+pub struct SparseMerkleInternalNode {
     left_child: [u8; 32],
     right_child: [u8; 32],
 }
@@ -81,7 +99,9 @@ impl SparseMerkleInternalNode {
     }
 }
 
-#[derive(Eq, Copy, Serialize, Deserialize, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+    Eq, Copy, Serialize, Deserialize, borsh::BorshSerialize, borsh::BorshDeserialize, Hash,
+)]
 pub struct SparseMerkleLeafNode {
     key_hash: KeyHash,
     value_hash: ValueHash,
