@@ -15,6 +15,7 @@ fn test_playground() {
     kvs.insert(KeyHash([1; 32]), b"abc".to_vec());
     kvs.insert(KeyHash([2; 32]), b"def".to_vec());
     kvs.insert(KeyHash([3; 32]), b"hij".to_vec());
+    kvs.insert(KeyHash([6; 32]), b"klm".to_vec());
 
     for (i, (key, value)) in kvs.clone().into_iter().enumerate() {
         let (_root_hash, write_batch) = tree
@@ -27,6 +28,7 @@ fn test_playground() {
     let key = KeyHash([1; 32]);
     let key2 = KeyHash([2; 32]);
     let key3 = KeyHash([3; 32]);
+    let key4 = KeyHash([6; 32]);
 
     // let proof = tree.get_with_proof(key, 0);
     // println!(">>> proof 0 : {:?}", proof);
@@ -56,9 +58,13 @@ fn test_playground() {
 
     println!(">>> tree root : {:?}", tree_root);
 
-    // let proof_component = multiproof.verify(
-    //     &[key, key2],
-    //     tree_root,
-    // );
-    // println!(">> multi proof verification: {:?}", proof_component);
+    let multiproof = tree.get_batch_with_proof([key2, key3].to_vec(), 2).unwrap();
+    println!(">>> multiproof : {:?}", multiproof);
+
+    let proof_component = multiproof.1.verify(
+        &[key2, key3],
+        &[Some(b"def".to_vec()), Some(b"abc".to_vec())],
+        tree_root,
+    );
+    println!(">> multi proof verification: {:?}", proof_component);
 }

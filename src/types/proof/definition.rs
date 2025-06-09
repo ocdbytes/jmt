@@ -7,9 +7,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::{SparseMerkleInternalNode, SparseMerkleLeafNode, SparseMerkleNode};
 use crate::{
-    storage::{Node, NodeKey},
-    types::nibble::nibble_path::{skip_common_prefix, NibblePath},
-    Bytes32Ext, KeyHash, RootHash, SimpleHasher, ValueHash, SPARSE_MERKLE_PLACEHOLDER_HASH,
+    storage::{Node, NodeKey}, types::nibble::nibble_path::{skip_common_prefix, NibblePath}, Bytes32Ext, KeyHash, OwnedValue, RootHash, SimpleHasher, ValueHash, SPARSE_MERKLE_PLACEHOLDER_HASH
 };
 use alloc::vec::Vec;
 use anyhow::{bail, ensure, format_err, Result};
@@ -41,11 +39,111 @@ pub struct SparseMerkleProof<H: SimpleHasher> {
     phantom_hasher: PhantomData<H>,
 }
 
-/// Represents a batch proof with shared siblings.
-pub struct BatchSparseMerkleProof {
-    pub leaves: HashMap<KeyHash, SparseMerkleLeafNode>,
-    pub shared_siblings: HashMap<NodeKey, SparseMerkleNode>,
+#[derive(Debug)]
+pub struct BatchSparseMerkleProof<H: SimpleHasher> {
+    /// The leaf nodes (if any) for each queried key, in the same order as requested.
+    pub leaves: Vec<Option<SparseMerkleLeafNode>>,
+
+    /// A minimal set of internal or leaf sibling nodes required to reconstruct the root.
+    pub shared_siblings: Vec<SparseMerkleNode>,
+
+    /// Optional: A mapping of each key's leaf index to its sibling indices (if needed for decoding).
+    pub proof_paths: Vec<Vec<usize>>,
+
+    /// Marker for the hasher used
+    pub phantom: PhantomData<H>,
 }
+
+impl<H: SimpleHasher> BatchSparseMerkleProof<H> {
+    pub fn verify<V: AsRef<[u8]>>(
+        &self,
+        keys: &[KeyHash],
+        values: &[Option<V>],
+        expected_root_hash: RootHash,
+    ) -> Result<()> {
+        ensure!(
+            keys.len() == values.len() &&
+            keys.len() == self.leaves.len() &&
+            keys.len() == self.proof_paths.len(),
+            "Mismatch in lengths: keys, values, leaves, proof_paths must match."
+        );
+
+        for i in 0..keys.len() {
+            let key = keys[i];
+            let value_opt = &values[i];
+            let leaf_opt = &self.leaves[i];
+            let sibling_indices = &self.proof_paths[i];
+
+            // Determine proof type: inclusion, non-inclusion (existing leaf), or null
+            match (value_opt, leaf_opt) {
+                (Some(value), Some(leaf)) => {
+                    // Inclusion proof
+                    ensure!(
+                        key == leaf.key_hash,
+                        "Mismatched key: proof = {:?}, input = {:?}",
+                        leaf.key_hash, key
+                    );
+
+                    let expected_value_hash = H::hash(value.as_ref());
+                    ensure!(
+                        expected_value_hash == leaf.value_hash.0,
+                        "Mismatched value hash: expected = {:?}, proof = {:?}",
+                        expected_value_hash, leaf.value_hash
+                    );
+                }
+                (Some(_), None) => bail!("Expected inclusion proof, got non-inclusion proof"),
+                (None, Some(leaf)) => {
+                    // Non-inclusion: key differs from leaf
+                    ensure!(
+                        key != leaf.key_hash,
+                        "Expected non-inclusion, but key was present"
+                    );
+                    ensure!(
+                        key.0.common_prefix_bits_len(&leaf.key_hash.0) >= sibling_indices.len(),
+                        "Invalid non-inclusion proof: key would not share path to leaf"
+                    );
+                }
+                (None, None) => {
+                    // Valid: non-inclusion to a Null slot
+                }
+            }
+
+            // Compute leaf or null hash
+            let current_hash = leaf_opt
+                .as_ref()
+                .map_or(SparseMerkleNode::Null.hash::<H>(), |leaf| leaf.hash::<H>());
+
+            // Prepare direction bits for positioning
+            let total_depth = sibling_indices.len();
+            let key_bits = key.0.iter_bits().rev().skip(256 - total_depth);
+
+            let mut hash = current_hash;
+
+            for (bit, &sibling_idx) in key_bits.zip(sibling_indices.iter()) {
+                let sibling = &self.shared_siblings[sibling_idx];
+                let sibling_hash = sibling.hash::<H>();
+
+                let (left, right) = if bit {
+                    (sibling_hash, hash)
+                } else {
+                    (hash, sibling_hash)
+                };
+
+                let parent_node = SparseMerkleInternalNode::new(left, right);
+                hash = parent_node.hash::<H>();
+            }
+
+            ensure!(
+                hash == expected_root_hash.0,
+                "Mismatched root hash for key {:?}: got {:?}, expected {:?}",
+                key, hash, expected_root_hash.0
+            );
+        }
+
+        Ok(())
+    }
+}
+
 
 // Deriving Debug fails since H is not Debug though phantom_hasher implements it
 // generically. Implement Debug manually as a workaround to enable Proptest
