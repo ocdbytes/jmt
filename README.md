@@ -1,5 +1,10 @@
 # Jellyfish Merkle Tree (JMT)
 
+> [!WARNING]
+> DON'T USE THE MULTIPROOF IMPLEMENTATION IN PROD.
+> It is not tested and audited properly yet. After updating
+> the test suite with all cases it can be used in dev environment.
+
 JMT is a highly efficient and append-only authenticated data structure designed to support versioned key-value stores. It is primarily used in blockchain systems like Diem for proving state inclusions and exclusions efficiently.
 
 This implementation supports:
