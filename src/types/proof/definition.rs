@@ -7,7 +7,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::{SparseMerkleInternalNode, SparseMerkleLeafNode, SparseMerkleNode};
 use crate::{
-    storage::{Node, NodeKey}, types::nibble::nibble_path::{skip_common_prefix, NibblePath}, Bytes32Ext, KeyHash, OwnedValue, RootHash, SimpleHasher, ValueHash, SPARSE_MERKLE_PLACEHOLDER_HASH
+    storage::{Node, NodeKey},
+    types::nibble::nibble_path::{skip_common_prefix, NibblePath},
+    Bytes32Ext, KeyHash, OwnedValue, RootHash, SimpleHasher, ValueHash,
+    SPARSE_MERKLE_PLACEHOLDER_HASH,
 };
 use alloc::vec::Vec;
 use anyhow::{bail, ensure, format_err, Result};
@@ -62,9 +65,9 @@ impl<H: SimpleHasher> BatchSparseMerkleProof<H> {
         expected_root_hash: RootHash,
     ) -> Result<()> {
         ensure!(
-            keys.len() == values.len() &&
-            keys.len() == self.leaves.len() &&
-            keys.len() == self.proof_paths.len(),
+            keys.len() == values.len()
+                && keys.len() == self.leaves.len()
+                && keys.len() == self.proof_paths.len(),
             "Mismatch in lengths: keys, values, leaves, proof_paths must match."
         );
 
@@ -81,14 +84,16 @@ impl<H: SimpleHasher> BatchSparseMerkleProof<H> {
                     ensure!(
                         key == leaf.key_hash,
                         "Mismatched key: proof = {:?}, input = {:?}",
-                        leaf.key_hash, key
+                        leaf.key_hash,
+                        key
                     );
 
                     let expected_value_hash = H::hash(value.as_ref());
                     ensure!(
                         expected_value_hash == leaf.value_hash.0,
                         "Mismatched value hash: expected = {:?}, proof = {:?}",
-                        expected_value_hash, leaf.value_hash
+                        expected_value_hash,
+                        leaf.value_hash
                     );
                 }
                 (Some(_), None) => bail!("Expected inclusion proof, got non-inclusion proof"),
@@ -136,14 +141,15 @@ impl<H: SimpleHasher> BatchSparseMerkleProof<H> {
             ensure!(
                 hash == expected_root_hash.0,
                 "Mismatched root hash for key {:?}: got {:?}, expected {:?}",
-                key, hash, expected_root_hash.0
+                key,
+                hash,
+                expected_root_hash.0
             );
         }
 
         Ok(())
     }
 }
-
 
 // Deriving Debug fails since H is not Debug though phantom_hasher implements it
 // generically. Implement Debug manually as a workaround to enable Proptest
